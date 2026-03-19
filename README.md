@@ -5,18 +5,6 @@ Features live WebRTC camera streams, ROS navigation map, motion controls, teleme
 
 ---
 
-## Requirements
-
-| Tool | Version |
-|------|---------|
-| Python | 3.x |
-| Robot | Unitree B2 |
-| Robot IP | Connected on same LAN or via Tailscale |
-| MediaMTX | Running on robot (port `8889`) |
-| rosbridge_server | Running on robot (port `9090`) |
-
----
-
 ## How to Install and Run Locally
 
 ### 1. Clone the repository
