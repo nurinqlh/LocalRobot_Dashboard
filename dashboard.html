@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>
+    (function() {
+      if (!sessionStorage.getItem('robot_auth')) window.location.replace('index.html');
+    })();
+  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Robot Control Center</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b24;
+      --surface2: #1c2333;
+      --border:   #21293a;
+      --accent:   #00e5a0;
+      --accent2:  #00aaff;
+      --danger:   #ff4d6a;
+      --warn:     #f59e0b;
+      --text:     #c8d0db;
+      --muted:    #4a5568;
+      --mono:     'Share Tech Mono', monospace;
+      --sans:     'Exo 2', sans-serif;
+      --topbar:   42px;
+      --bottom:   210px;
+    }
+
+    html, body {
+      height: 100%; width: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 13px;
+    }
+
+    #app {
+      display: grid;
+      grid-template-rows: var(--topbar) 1fr var(--bottom);
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* ── Top Bar ── */
+    #topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 16px;
+      gap: 16px;
+      z-index: 10;
+    }
+    .topbar-left  { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .logo-wrap img { height: 26px; padding: 3px 8px; }
+    .brand { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; color: #fff; text-transform: uppercase; }
+    .brand span { color: var(--accent); }
+    .divider-v { width: 1px; height: 20px; background: var(--border); }
+    .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; transition: background 0.4s; }
+    .conn-dot.online  { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+    .conn-dot.offline { background: var(--danger);  box-shadow: 0 0 6px var(--danger); }
+    #connText { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+    .role-badge { padding: 2px 9px; border-radius: 20px; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+    .role-admin  { background: rgba(255,77,106,0.15); color: #ff4d6a; border: 1px solid rgba(255,77,106,0.35); }
+    .role-editor { background: rgba(0,170,255,0.15);  color: #00aaff; border: 1px solid rgba(0,170,255,0.35); }
+    .role-viewer { background: rgba(0,229,160,0.15);  color: #00e5a0; border: 1px solid rgba(0,229,160,0.35); }
+    #bannerUser { font-family: var(--mono); font-size: 11px; color: var(--text); }
+
+    /* Gamepad indicator in topbar */
+    #gamepadIndicator {
+      display: flex; align-items: center; gap: 5px;
+      font-family: var(--mono); font-size: 10px; color: var(--muted);
+      padding: 3px 8px; border: 1px solid var(--border); border-radius: 4px;
+      transition: all 0.3s;
+    }
+    #gamepadIndicator.active { color: var(--accent); border-color: var(--accent); background: rgba(0,229,160,0.06); }
+    #gamepadDot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+    #gamepadIndicator.active #gamepadDot { background: var(--accent); box-shadow: 0 0 5px var(--accent); }
+
+    .settings-btn {
+      background: rgba(0,170,255,0.1); color: var(--accent2); border: 1px solid rgba(0,170,255,0.3);
+      border-radius: 5px; padding: 4px 10px; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.08em; cursor: pointer; font-family: var(--sans);
+    }
+    .settings-btn:hover { background: rgba(0,170,255,0.2); }
+    .logout-btn {
+      background: rgba(255,77,106,0.12); color: #ff4d6a; border: 1px solid rgba(255,77,106,0.3);
+      border-radius: 5px; padding: 4px 12px; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; transition: background 0.2s; font-family: var(--sans);
+    }
+    .logout-btn:hover { background: rgba(255,77,106,0.25); }
+
+    /* ── Settings Modal ── */
+    #settingsModal {
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,0.7); align-items: center; justify-content: center;
+    }
+    #settingsModal.open { display: flex; }
+    .modal-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 24px; width: 420px; max-width: 95vw;
+    }
+    .modal-title {
+      font-size: 14px; font-weight: 700; color: var(--accent);
+      margin-bottom: 18px; letter-spacing: 0.1em; text-transform: uppercase; font-family: var(--mono);
+    }
+    .setting-row { margin-bottom: 14px; }
+    .setting-row label {
+      display: block; font-size: 10px; color: var(--muted);
+      font-family: var(--mono); letter-spacing: 0.1em; margin-bottom: 5px;
+    }
+    .setting-row input {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); padding: 7px 10px; border-radius: 5px;
+      font-family: var(--mono); font-size: 12px; outline: none;
+    }
+    .setting-row input:focus { border-color: var(--accent2); }
+    .setting-hint { font-size: 10px; color: var(--muted); margin-top: 3px; font-family: var(--mono); }
+    .modal-btns { display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end; }
+    .btn-modal {
+      padding: 7px 18px; border-radius: 5px; font-size: 11px; font-weight: 700;
+      cursor: pointer; font-family: var(--sans); letter-spacing: 0.05em; border: 1px solid;
+    }
+    .btn-save  { background: rgba(0,229,160,0.15); color: var(--accent); border-color: rgba(0,229,160,0.4); }
+    .btn-save:hover { background: rgba(0,229,160,0.3); }
+    .btn-cancel { background: transparent; color: var(--muted); border-color: var(--border); }
+    .btn-cancel:hover { background: var(--surface2); }
+
+    /* ── Main Area ── */
+    #main {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 220px;
+      overflow: hidden;
+      gap: 1px;
+      background: var(--border);
+    }
+
+    /* ── Bottom Strip ── */
+    #bottom {
+      display: grid;
+      grid-template-columns: 340px 1fr 220px;
+      gap: 1px;
+      background: var(--border);
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── Panel base ── */
+    .panel { background: var(--surface); display: flex; flex-direction: column; overflow: hidden; }
+    .panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 7px 12px 6px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .panel-title { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 5px var(--accent); flex-shrink: 0; }
+    .dot-blue { background: var(--accent2); box-shadow: 0 0 5px var(--accent2); }
+    .dot-warn { background: var(--warn); box-shadow: 0 0 5px var(--warn); }
+    .dot-red  { background: var(--danger); box-shadow: 0 0 5px var(--danger); }
+    .panel-body { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+    /* ── Camera columns ── */
+    #colFront, #colBack { display: flex; flex-direction: column; overflow: hidden; background: var(--surface); }
+    .cam-panel { flex: 1; background: var(--surface); display: flex; flex-direction: column; overflow: hidden; }
+    .cam-feed-wrap {
+      flex: 1; background: #000; display: flex; align-items: center;
+      justify-content: center; position: relative; overflow: hidden;
+    }
+    .cam-feed-wrap video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .cam-overlay {
+      position: absolute; bottom: 6px; left: 8px;
+      font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,0.5);
+      background: rgba(0,0,0,0.45); padding: 2px 6px; border-radius: 3px;
+    }
+    .cam-status-dot { position: absolute; top: 8px; right: 8px; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+    .cam-status-dot.live { background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: blink 2s infinite; }
+    .cam-reconnect {
+      position: absolute; bottom: 6px; right: 8px;
+      background: rgba(0,170,255,0.15); border: 1px solid rgba(0,170,255,0.35);
+      color: var(--accent2); font-family: var(--mono); font-size: 9px;
+      padding: 2px 7px; border-radius: 3px; cursor: pointer; display: none;
+    }
+    .cam-reconnect:hover { background: rgba(0,170,255,0.3); }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    /* no-feed placeholder */
+    .no-feed-msg {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 6px;
+      font-family: var(--mono); font-size: 11px; color: var(--muted);
+      background: #060a10;
+    }
+    .no-feed-msg .nf-icon { font-size: 28px; opacity: 0.25; }
+
+    /* ── CENTER: Map ── */
+    #colCenter { display: flex; flex-direction: column; }
+    .map-toggle-btn {
+      background: rgba(0,170,255,0.12); color: var(--accent2);
+      border: 1px solid rgba(0,170,255,0.3); border-radius: 4px;
+      padding: 2px 8px; font-size: 10px; font-weight: 700;
+      cursor: pointer; font-family: var(--mono); letter-spacing: 0.05em;
+      transition: all 0.2s; white-space: nowrap;
+    }
+    .map-toggle-btn:hover { background: rgba(0,170,255,0.25); }
+    .map-toggle-btn.hidden-state { background: rgba(255,170,0,0.12); color: var(--warn); border-color: rgba(255,170,0,0.3); }
+    #colCenter .panel-body { flex: 1; position: relative; overflow: hidden; }
+    #mapCanvas { display: block; width: 100%; height: 100%; cursor: grab; background: #0a0f18; }
+    #mapCanvas:active { cursor: grabbing; }
+    .map-btn-row {
+      display: flex; gap: 5px; padding: 6px 10px; border-top: 1px solid var(--border);
+      flex-shrink: 0; background: var(--surface2);
+    }
+    .map-btn {
+      flex: 1; padding: 6px 2px; border-radius: 5px; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer;
+      transition: all 0.2s; font-family: var(--sans); white-space: nowrap; border: 1px solid;
+    }
+    .map-btn:hover { transform: translateY(-1px); }
+    .map-btn-green  { background: rgba(40,167,69,0.15);  color: #28a745; border-color: rgba(40,167,69,0.35); }
+    .map-btn-red    { background: rgba(220,53,69,0.15);  color: #dc3545; border-color: rgba(220,53,69,0.35); }
+    .map-btn-blue   { background: rgba(23,162,184,0.15); color: #17a2b8; border-color: rgba(23,162,184,0.35); }
+    .map-btn-gray   { background: rgba(108,117,125,0.15);color: #6c757d; border-color: rgba(108,117,125,0.35); }
+    .map-info-row { display: flex; gap: 1px; background: var(--border); flex-shrink: 0; }
+    .mic { background: var(--surface2); flex: 1; padding: 5px 10px; }
+    .mic-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; font-family: var(--mono); }
+    .mic-value { font-size: 11px; color: var(--text); font-family: var(--mono); margin-top: 1px; }
+
+    /* ── RIGHT: Status ── */
+    #colRight { display: flex; flex-direction: column; gap: 1px; background: var(--border); overflow: hidden; }
+    .stat-panel { flex: 1; background: var(--surface); display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+    .stat-body { flex: 1; padding: 7px 10px; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+    .stat-row { display: flex; justify-content: space-between; align-items: center; }
+    .stat-label { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+    .stat-value { font-size: 11px; color: var(--text); font-family: var(--mono); font-weight: 700; }
+    .stat-value.green { color: var(--accent); }
+    .stat-value.blue  { color: var(--accent2); }
+    .batt-bar { width: 100%; height: 7px; background: var(--surface2); border-radius: 4px; overflow: hidden; margin-top: 3px; border: 1px solid var(--border); }
+    .batt-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg,#00e5a0,#00c87a); transition: width 0.6s; }
+
+    /* ── BOTTOM LEFT: Dual Joystick ── */
+    #bottomLeft { background: var(--surface); display: flex; flex-direction: column; overflow: hidden; }
+    .joystick-area { flex: 1; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 6px 10px; }
+
+    /* Left joystick (linear) */
+    .js-wrap { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+    .js-label { font-size: 9px; font-family: var(--mono); color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
+    #joystick-container {
+      width: 110px; height: 110px;
+      background: radial-gradient(circle at 40% 40%, #1c2840, #0d1117);
+      border: 1.5px solid var(--border); border-radius: 50%;
+      position: relative; flex-shrink: 0;
+      box-shadow: inset 0 2px 12px rgba(0,0,0,0.6), 0 0 0 3px rgba(0,229,160,0.04);
+      cursor: grab; touch-action: none;
+    }
+    #joystick-container:active { cursor: grabbing; }
+
+    /* Right joystick (yaw) */
+    #yaw-container {
+      width: 110px; height: 110px;
+      background: radial-gradient(circle at 40% 40%, #1c2033, #0d1117);
+      border: 1.5px solid var(--border); border-radius: 50%;
+      position: relative; flex-shrink: 0;
+      box-shadow: inset 0 2px 12px rgba(0,0,0,0.6), 0 0 0 3px rgba(0,170,255,0.04);
+      cursor: grab; touch-action: none;
+    }
+    #yaw-container:active { cursor: grabbing; }
+
+    .js-axis { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; }
+    .js-axis::before { content:''; position:absolute; width:1px; height:100%; left:50%; background:rgba(0,229,160,0.1); }
+    .js-axis::after  { content:''; position:absolute; height:1px; width:100%; top:50%;  background:rgba(0,229,160,0.1); }
+    .js-axis.yaw-axis::before { background:rgba(0,170,255,0.1); }
+    .js-axis.yaw-axis::after  { background:rgba(0,170,255,0.1); }
+
+    #joystick {
+      width: 34px; height: 34px;
+      background: radial-gradient(circle at 35% 35%, #00e5a0, #009060);
+      border-radius: 50%; position: absolute;
+      box-shadow: 0 0 14px rgba(0,229,160,0.5), 0 3px 6px rgba(0,0,0,0.5);
+    }
+    #yaw-knob {
+      width: 34px; height: 34px;
+      background: radial-gradient(circle at 35% 35%, #00aaff, #0060a0);
+      border-radius: 50%; position: absolute;
+      box-shadow: 0 0 14px rgba(0,170,255,0.5), 0 3px 6px rgba(0,0,0,0.5);
+    }
+
+    /* WASD keys */
+    .wasd-wrap { display: flex; flex-direction: column; gap: 3px; align-items: center; }
+    .wasd-row { display: flex; gap: 3px; }
+    .key {
+      width: 28px; height: 28px; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 5px; display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700; color: var(--muted); font-family: var(--mono);
+      transition: all 0.1s; user-select: none;
+    }
+    .key.pressed { background: rgba(0,229,160,0.15); border-color: var(--accent); color: var(--accent); box-shadow: 0 0 8px rgba(0,229,160,0.3); }
+    .key.yaw-key.pressed { background: rgba(0,170,255,0.15); border-color: var(--accent2); color: var(--accent2); box-shadow: 0 0 8px rgba(0,170,255,0.3); }
+    .js-status-wrap { font-size: 9px; font-family: var(--mono); color: var(--muted); text-align: center; margin-top: 2px; letter-spacing: 0.08em; }
+
+    /* Gamepad axes display */
+    .gp-axes {
+      display: flex; flex-direction: column; gap: 3px; align-items: center;
+      font-family: var(--mono); font-size: 9px; color: var(--muted);
+    }
+    .gp-bar-wrap { display: flex; align-items: center; gap: 4px; width: 80px; }
+    .gp-bar-track { flex: 1; height: 4px; background: var(--surface2); border-radius: 2px; position: relative; }
+    .gp-bar-fill { position: absolute; height: 100%; background: var(--accent2); border-radius: 2px; transition: all 0.05s; }
+
+    /* ── BOTTOM CENTER: Telemetry ── */
+    #bottomCenter { background: var(--surface); display: flex; flex-direction: column; overflow: hidden; }
+    .bc-body { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); overflow: hidden; }
+    .bc-cell { background: var(--surface2); display: flex; flex-direction: column; justify-content: center; padding: 8px 12px; gap: 2px; }
+    .bc-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; font-family: var(--mono); }
+    .bc-value { font-size: 18px; font-weight: 800; color: var(--text); font-family: var(--mono); line-height: 1; }
+    .bc-unit  { font-size: 9px; color: var(--muted); font-family: var(--mono); }
+    .goal-card { display: none; padding: 7px 12px; border-top: 1px solid var(--border); background: rgba(255,77,106,0.05); flex-shrink: 0; }
+    .goal-card.visible { display: block; }
+    .goal-title { font-size: 9px; color: var(--danger); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; font-family: var(--mono); }
+    .goal-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; }
+    .goal-cell { display: flex; flex-direction: column; gap: 1px; }
+
+    /* ── BOTTOM RIGHT: System status ── */
+    #bottomRight { background: var(--surface); display: flex; flex-direction: column; overflow: hidden; }
+    .br-body { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); overflow: hidden; }
+    .br-cell { background: var(--surface2); display: flex; flex-direction: column; justify-content: center; padding: 7px 10px; gap: 2px; }
+
+    /* ── Viewer lock ── */
+    .viewer-locked { position: relative; pointer-events: none; opacity: 0.4; user-select: none; }
+    .viewer-locked::after {
+      content: 'VIEW ONLY'; position: absolute; inset: 0; display: flex; align-items: center;
+      justify-content: center; font-size: 10px; font-weight: 700; letter-spacing: 0.15em;
+      color: var(--accent); background: rgba(0,0,0,0.4); pointer-events: none; font-family: var(--mono);
+    }
+
+    ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: var(--bg); } ::-webkit-scrollbar-thumb { background: var(--border); }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- TOP BAR -->
+  <div id="topbar">
+    <div class="topbar-left">
+      <div class="logo-wrap">
+        <img src="Glocomp.png" alt="Glocomp" onerror="this.style.display='none'">
+      </div>
+      <div class="divider-v"></div>
+      <div class="logo-wrap">
+        <img src="Unitree.png" alt="Unitree" onerror="this.style.display='none'">
+      </div>
+      <div class="divider-v"></div>
+      <div class="brand">Robot <span>Control Center</span></div>
+      <div class="divider-v"></div>
+      <div class="conn-dot" id="connDot"></div>
+      <span id="connText">Connecting...</span>
+    </div>
+    <div class="topbar-right">
+      <div id="gamepadIndicator">
+        <div id="gamepadDot"></div>
+        <span id="gamepadName">No Gamepad</span>
+      </div>  
+      <button class="map-toggle-btn" id="mapToggleBtn" onclick="toggleMap()">⊟ Map</button>
+      <button class="map-toggle-btn" id="motionToggleBtn" onclick="toggleMotion()">⊟ Motion</button>
+      <button class="map-toggle-btn" id="telemetryToggleBtn" onclick="toggleTelemetry()">⊟ Telemetry</button>
+      <button class="map-toggle-btn" id="statusToggleBtn" onclick="toggleStatus()">⊟ Status</button>
+      <button class="settings-btn" onclick="openSettings()">⚙ Settings</button>
+      <span id="bannerUser">--</span>
+      <span id="bannerBadge" class="role-badge">--</span>
+      <button class="logout-btn" onclick="doLogout()">&#x23CF; Logout</button>
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div id="settingsModal">
+    <div class="modal-box">
+      <div class="modal-title">⚙ Connection Settings</div>
+
+      <div class="setting-row">
+        <label>ROBOT IP (Tailscale / LAN)</label>
+        <input type="text" id="cfgRobotIP" placeholder="e.g. 100.118.2.96">
+        <div class="setting-hint">Used for WebRTC (MediaMTX) and ROS bridge</div>
+      </div>
+      <div class="setting-row">
+        <label>MEDIAMTX PORT</label>
+        <input type="text" id="cfgMediaMTXPort" placeholder="8889">
+        <div class="setting-hint">Default MediaMTX WebRTC port</div>
+      </div>
+      <div class="setting-row">
+        <label>ROSBRIDGE PORT</label>
+        <input type="text" id="cfgRosBridgePort" placeholder="9090">
+        <div class="setting-hint">rosbridge_server WebSocket port</div>
+      </div>
+      <div class="setting-row">
+        <label>FRONT CAMERA STREAM NAME</label>
+        <input type="text" id="cfgFrontStream" placeholder="front_cam_low">
+      </div>
+      <div class="setting-row">
+        <label>BACK CAMERA STREAM NAME</label>
+        <input type="text" id="cfgBackStream" placeholder="back_cam_low">
+      </div>
+
+      <div class="modal-btns">
+        <button class="btn-modal btn-cancel" onclick="closeSettings()">Cancel</button>
+        <button class="btn-modal btn-save" onclick="saveSettings()">Save &amp; Reconnect</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div id="main">
+
+    <!-- COL 1: Front Camera (full height) -->
+    <div id="colFront">
+      <div class="panel-header">
+        <div class="panel-title"><span class="dot"></span>Front Camera</div>
+        <span id="frontCameraStatus" style="font-size:10px;font-family:var(--mono);color:var(--muted)">Connecting...</span>
+      </div>
+      <div class="cam-feed-wrap" style="flex:1">
+        <div class="no-feed-msg" id="frontNoFeed">
+          <div class="nf-icon">📷</div>
+          <div>No Feed</div>
+        </div>
+        <video id="frontCamera" autoplay muted playsinline></video>
+        <div class="cam-overlay">FRONT · WIDE</div>
+        <div class="cam-status-dot" id="frontDot"></div>
+        <button class="cam-reconnect" id="frontReconnBtn" onclick="reconnectCam('front')">↺ Retry</button>
+      </div>
+    </div>
+
+    <!-- COL 2: Back Camera (full height) -->
+    <div id="colBack">
+      <div class="panel-header">
+        <div class="panel-title"><span class="dot dot-blue"></span>Back Camera</div>
+        <span id="backCameraStatus" style="font-size:10px;font-family:var(--mono);color:var(--muted)">Connecting...</span>
+      </div>
+      <div class="cam-feed-wrap" style="flex:1">
+        <div class="no-feed-msg" id="backNoFeed">
+          <div class="nf-icon">📷</div>
+          <div>No Feed</div>
+        </div>
+        <video id="backCamera" autoplay muted playsinline></video>
+        <div class="cam-overlay">REAR · WIDE</div>
+        <div class="cam-status-dot" id="backDot"></div>
+        <button class="cam-reconnect" id="backReconnBtn" onclick="reconnectCam('back')">↺ Retry</button>
+      </div>
+    </div>
+
+    <!-- CENTER: Navigation Map -->
+    <div id="colCenter" class="panel">
+      <div class="panel-header">
+        <div class="panel-title"><span class="dot dot-blue"></span>Navigation Map</div>
+        <span id="zoomLevel" style="font-size:10px;font-family:var(--mono);color:var(--muted)">1.00x</span>
+      </div>
+      <div class="panel-body">
+        <canvas id="mapCanvas"></canvas>
+      </div>
+      <div class="map-btn-row" id="mapControlsDiv">
+        <button id="setGoalBtn"    class="map-btn map-btn-green">&#x1F3AF; Set Goal</button>
+        <button id="clearGoalBtn"  class="map-btn map-btn-red">&#x1F5D1; Clear</button>
+        <button id="centerViewBtn" class="map-btn map-btn-blue">&#x1F4CD; Center</button>
+        <button id="resetZoomBtn"  class="map-btn map-btn-gray">&#x1F50D; Reset</button>
+      </div>
+      <div class="map-info-row">
+        <div class="mic"><div class="mic-label">Map Status</div><div class="mic-value" id="mapStatus">Waiting...</div></div>
+        <div class="mic"><div class="mic-label">SLAM</div><div class="mic-value" id="slamStatus">--</div></div>
+        <div class="mic"><div class="mic-label">Updated</div><div class="mic-value" id="slamTime">--</div></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Status panels -->
+    <div id="colRight">
+      <!-- Battery -->
+      <div class="stat-panel">
+        <div class="panel-header">
+          <div class="panel-title"><span class="dot dot-warn"></span>Battery</div>
+          <span class="stat-value green" id="batterySOC" style="font-size:14px;font-family:var(--mono)">--%</span>
+        </div>
+        <div class="stat-body">
+          <div class="batt-bar"><div class="batt-fill" id="batteryFill" style="width:0%"></div></div>
+        </div>
+      </div>
+      <!-- Position -->
+      <div class="stat-panel">
+        <div class="panel-header"><div class="panel-title"><span class="dot"></span>Position</div></div>
+        <div class="stat-body">
+          <div class="stat-row"><span class="stat-label">X</span><span class="stat-value" id="posX">--</span></div>
+          <div class="stat-row"><span class="stat-label">Y</span><span class="stat-value" id="posY">--</span></div>
+          <div class="stat-row"><span class="stat-label">Z</span><span class="stat-value" id="posZ">--</span></div>
+          <div class="stat-row"><span class="stat-label">Yaw</span><span class="stat-value green" id="yaw">--</span></div>
+        </div>
+      </div>
+      <!-- Velocity -->
+      <div class="stat-panel">
+        <div class="panel-header"><div class="panel-title"><span class="dot dot-blue"></span>Velocity</div></div>
+        <div class="stat-body">
+          <div class="stat-row"><span class="stat-label">Vx</span><span class="stat-value" id="velX">--</span></div>
+          <div class="stat-row"><span class="stat-label">Vy</span><span class="stat-value" id="velY">--</span></div>
+          <div class="stat-row"><span class="stat-label">Vz</span><span class="stat-value" id="velZ">--</span></div>
+          <div class="stat-row"><span class="stat-label">Yaw&#x2205;</span><span class="stat-value green" id="yawSpeed">--</span></div>
+        </div>
+      </div>
+      <!-- Robot Info -->
+      <div class="stat-panel">
+        <div class="panel-header"><div class="panel-title"><span class="dot"></span>Robot Info</div></div>
+        <div class="stat-body">
+          <div class="stat-row"><span class="stat-label">Unit</span><span class="stat-value green">Unitree B2</span></div>
+          <div class="stat-row"><span class="stat-label">Mode</span><span class="stat-value" id="robotMode">--</span></div>
+          <div class="stat-row"><span class="stat-label">Gait</span><span class="stat-value" id="gaitType">--</span></div>
+          <div class="stat-row"><span class="stat-label">Height</span><span class="stat-value" id="bodyHeight">--</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+
+  <!-- BOTTOM STRIP -->
+  <div id="bottom">
+
+    <!-- Bottom-left: Dual Joystick + WASD -->
+    <div id="bottomLeft">
+      <div class="panel-header">
+        <div class="panel-title"><span class="dot dot-blue"></span>Motion Control</div>
+        <span id="joystickStatus" style="font-size:9px;font-family:var(--mono);color:var(--muted);letter-spacing:0.08em">CENTERED</span>
+      </div>
+      <div class="joystick-area" id="joystickArea">
+
+        <!-- Linear joystick (left) -->
+        <div class="js-wrap">
+          <div class="js-label">Linear</div>
+          <div id="joystick-container">
+            <div class="js-axis"></div>
+            <div id="joystick"></div>
+          </div>
+          <div class="js-status-wrap" id="jsLinStatus">x:0.00 y:0.00</div>
+        </div>
+
+        <!-- WASD + QE keys in the middle -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <div class="wasd-wrap">
+            <div class="wasd-row"><div class="key" id="key-w">W</div></div>
+            <div class="wasd-row">
+              <div class="key" id="key-a">A</div>
+              <div class="key" id="key-s">S</div>
+              <div class="key" id="key-d">D</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:3px;margin-top:3px">
+            <div class="key yaw-key" id="key-q">Q</div>
+            <div class="key yaw-key" id="key-e">E</div>
+          </div>
+          <div class="js-status-wrap">WASD + Q/E yaw</div>
+        </div>
+
+        <!-- Yaw joystick (right) -->
+        <div class="js-wrap">
+          <div class="js-label" style="color:var(--accent2)">Yaw</div>
+          <div id="yaw-container">
+            <div class="js-axis yaw-axis"></div>
+            <div id="yaw-knob"></div>
+          </div>
+          <div class="js-status-wrap" id="jsYawStatus">yaw: 0.00</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Bottom-center: Big telemetry numbers -->
+    <div id="bottomCenter">
+      <div class="panel-header">
+        <div class="panel-title"><span class="dot"></span>Telemetry</div>
+        <span id="slamErrorDisp" style="font-size:10px;font-family:var(--mono);color:var(--muted)">SLAM ERR: --</span>
+      </div>
+      <div class="bc-body">
+        <div class="bc-cell">
+          <span class="bc-label">Speed X</span>
+          <span class="bc-value" id="bigVelX">--</span>
+          <span class="bc-unit">m/s</span>
+        </div>
+        <div class="bc-cell">
+          <span class="bc-label">Speed Y</span>
+          <span class="bc-value" id="bigVelY">--</span>
+          <span class="bc-unit">m/s</span>
+        </div>
+        <div class="bc-cell">
+          <span class="bc-label">Yaw Rate</span>
+          <span class="bc-value" id="bigYawSpeed">--</span>
+          <span class="bc-unit">rad/s</span>
+        </div>
+      </div>
+      <div class="goal-card" id="goalInfoCard">
+        <div class="goal-title">&#x1F3AF; Active Goal</div>
+        <div class="goal-grid">
+          <div class="goal-cell"><span class="bc-label">Goal X</span><span class="stat-value" id="goalX" style="font-size:11px">--</span></div>
+          <div class="goal-cell"><span class="bc-label">Goal Y</span><span class="stat-value" id="goalY" style="font-size:11px">--</span></div>
+          <div class="goal-cell"><span class="bc-label">Distance</span><span class="stat-value green" id="goalDistance" style="font-size:11px">--</span></div>
+          <div class="goal-cell"><span class="bc-label">Direction</span><span class="stat-value" id="goalDirection" style="font-size:11px">--</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom-right: System status -->
+    <div id="bottomRight">
+      <div class="panel-header"><div class="panel-title"><span class="dot"></span>System Status</div></div>
+      <div class="br-body">
+        <div class="br-cell">
+          <span class="bc-label">Mode</span>
+          <span class="stat-value green" id="modeDisp" style="font-size:11px">--</span>
+        </div>
+        <div class="br-cell">
+          <span class="bc-label">Gait</span>
+          <span class="stat-value" id="gaitDisp" style="font-size:11px">--</span>
+        </div>
+        <div class="br-cell">
+          <span class="bc-label">SLAM State</span>
+          <span class="stat-value" id="slamDisp" style="font-size:11px">--</span>
+        </div>
+        <div class="br-cell">
+          <span class="bc-label">Body Height</span>
+          <span class="stat-value" id="heightDisp" style="font-size:11px">--</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /bottom -->
+
+</div><!-- /app -->
+
+<script src="libs/easeljs.min.js"></script>
+<script src="libs/eventemitter2.min.js"></script>
+<script src="libs/roslib.min.js"></script>
+<script src="libs/ros2d.min.js"></script>
+<script src="app.js"></script>
+<script src="navigation.js"></script>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+//  CONFIG  — editable via Settings modal, persisted in localStorage
+// ══════════════════════════════════════════════════════════════
+const CFG_KEY = 'robot_dashboard_cfg';
+
+function loadConfig() {
+  const defaults = {
+    robotIP:        '100.118.2.96',
+    mediaMTXPort:   '8889',
+    rosBridgePort:  '9090',
+    frontStream:    'front_cam_low',
+    backStream:     'back_cam_low',
+  };
+  try {
+    const saved = JSON.parse(localStorage.getItem(CFG_KEY) || '{}');
+    return Object.assign({}, defaults, saved);
+  } catch { return defaults; }
+}
+
+function saveConfig(cfg) {
+  localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+}
+
+let CFG = loadConfig();
+
+// Derived helpers
+function robotBase()    { return `http://${CFG.robotIP}:${CFG.mediaMTXPort}`; }
+function rosBridgeURL() { return `ws://${CFG.robotIP}:${CFG.rosBridgePort}`; }
+
+// ── Settings modal ──
+function openSettings() {
+  const m = document.getElementById('settingsModal');
+  document.getElementById('cfgRobotIP').value       = CFG.robotIP;
+  document.getElementById('cfgMediaMTXPort').value  = CFG.mediaMTXPort;
+  document.getElementById('cfgRosBridgePort').value = CFG.rosBridgePort;
+  document.getElementById('cfgFrontStream').value   = CFG.frontStream;
+  document.getElementById('cfgBackStream').value    = CFG.backStream;
+  m.classList.add('open');
+}
+function closeSettings() { document.getElementById('settingsModal').classList.remove('open'); }
+function saveSettings() {
+  CFG = {
+    robotIP:       document.getElementById('cfgRobotIP').value.trim()       || CFG.robotIP,
+    mediaMTXPort:  document.getElementById('cfgMediaMTXPort').value.trim()  || CFG.mediaMTXPort,
+    rosBridgePort: document.getElementById('cfgRosBridgePort').value.trim() || CFG.rosBridgePort,
+    frontStream:   document.getElementById('cfgFrontStream').value.trim()   || CFG.frontStream,
+    backStream:    document.getElementById('cfgBackStream').value.trim()    || CFG.backStream,
+  };
+  saveConfig(CFG);
+  closeSettings();
+  stopAllCams();
+  setTimeout(() => {
+    startWebRTC('frontCamera','frontCameraStatus','frontDot','frontNoFeed','frontReconnBtn', CFG.frontStream);
+    startWebRTC('backCamera', 'backCameraStatus', 'backDot', 'backNoFeed', 'backReconnBtn',  CFG.backStream);
+  }, 300);
+}
+
+// ── Role UI ──
+(function() {
+  const role = sessionStorage.getItem('robot_role') || 'viewer';
+  const user = sessionStorage.getItem('robot_user') || 'Unknown';
+  document.getElementById('bannerUser').textContent = user;
+  const badge = document.getElementById('bannerBadge');
+  badge.textContent = role.toUpperCase();
+  badge.className = 'role-badge role-' + role;
+  if (role === 'viewer') {
+    ['joystickArea','mapControlsDiv'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('viewer-locked');
+    });
+    window.__viewerMode = true;
+  }
+  if (role === 'admin') window.__adminMode = true;
+})();
+
+function doLogout() {
+  ['robot_auth','robot_role','robot_user'].forEach(k => sessionStorage.removeItem(k));
+  window.location.replace('index.html');
+}
+
+// ── Connection status ──
+function updateConnectionStatus(connected) {
+  const dot  = document.getElementById('connDot');
+  const text = document.getElementById('connText');
+  dot.className = 'conn-dot ' + (connected ? 'online' : 'offline');
+  text.textContent = connected ? `Connected · ${CFG.robotIP}` : 'Disconnected';
+  text.style.color  = connected ? 'var(--accent)' : 'var(--danger)';
+}
+
+// ── Map canvas sizing ──
+function resizeMapCanvas() {
+  const canvas = document.getElementById('mapCanvas');
+  if (!canvas) return;
+  const p = canvas.parentElement;
+  canvas.width  = p.offsetWidth;
+  canvas.height = p.offsetHeight;
+  if (typeof mapRenderer !== 'undefined' && mapRenderer.redraw) mapRenderer.redraw();
+}
+window.addEventListener('resize', resizeMapCanvas);
+
+// ══════════════════════════════════════════════════════════════
+//  WebRTC — MediaMTX WHEP
+// ══════════════════════════════════════════════════════════════
+const camPCs = {};
+
+function stopAllCams() {
+  Object.keys(camPCs).forEach(k => {
+    try { camPCs[k].close(); } catch {}
+    delete camPCs[k];
+  });
+}
+
+async function startWebRTC(videoId, statusId, dotId, noFeedId, reconnBtnId, streamName) {
+  const video     = document.getElementById(videoId);
+  const status    = document.getElementById(statusId);
+  const dot       = document.getElementById(dotId);
+  const noFeed    = document.getElementById(noFeedId);
+  const reconnBtn = document.getElementById(reconnBtnId);
+
+  video.style.display = 'none';
+  noFeed.style.display = 'flex';
+  dot.classList.remove('live');
+  status.textContent = 'Connecting...';
+  status.style.color = 'var(--muted)';
+  if (reconnBtn) reconnBtn.style.display = 'none';
+
+  if (camPCs[videoId]) { try { camPCs[videoId].close(); } catch {} }
+
+  try {
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    });
+    camPCs[videoId] = pc;
+
+    pc.ontrack = evt => {
+      console.log('[WebRTC] Got track:', evt.track.kind, streamName);
+      video.srcObject = evt.streams[0];
+      video.muted = true;
+      video.play().then(() => {
+        video.style.display = 'block';
+        noFeed.style.display = 'none';
+        status.textContent = 'LIVE';
+        status.style.color = 'var(--accent)';
+        dot.classList.add('live');
+        if (reconnBtn) reconnBtn.style.display = 'none';
+      }).catch(err => {
+        console.warn('[WebRTC] play() failed:', err);
+        status.textContent = 'CLICK TO PLAY';
+        status.style.color = 'var(--warn)';
+        noFeed.style.display = 'flex';
+        noFeed.innerHTML = '<div class="nf-icon">▶</div><div style="cursor:pointer" onclick="document.getElementById(\''+videoId+'\').play();this.parentElement.style.display=\'none\';document.getElementById(\''+videoId+'\').style.display=\'block\'">Click to start video</div>';
+      });
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log('[WebRTC] ICE state:', pc.iceConnectionState, streamName);
+      if (['failed','disconnected','closed'].includes(pc.iceConnectionState)) {
+        video.style.display = 'none';
+        noFeed.style.display = 'flex';
+        dot.classList.remove('live');
+        status.textContent = 'Lost — retrying...';
+        status.style.color = 'var(--danger)';
+        if (reconnBtn) reconnBtn.style.display = 'block';
+        setTimeout(() => startWebRTC(videoId, statusId, dotId, noFeedId, reconnBtnId, streamName), 3000);
+      }
+    };
+
+    pc.addTransceiver('video', { direction: 'recvonly' });
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    const whepUrl = `${robotBase()}/${streamName}/whep`;
+    console.log('[WebRTC] Connecting to:', whepUrl);
+    const res = await fetch(whepUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/sdp' },
+      body: offer.sdp
+    });
+
+    if (!res.ok) throw new Error('WHEP HTTP ' + res.status);
+    const answerSdp = await res.text();
+    await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+    console.log('[WebRTC] SDP exchange done for', streamName);
+
+  } catch (e) {
+    video.style.display = 'none';
+    noFeed.style.display = 'flex';
+    dot.classList.remove('live');
+    status.textContent = 'FAILED — retrying...';
+    status.style.color = 'var(--danger)';
+    if (reconnBtn) reconnBtn.style.display = 'block';
+    console.warn(`[WebRTC] ${streamName} failed:`, e.message);
+    setTimeout(() => startWebRTC(videoId, statusId, dotId, noFeedId, reconnBtnId, streamName), 5000);
+  }
+}
+
+function reconnectCam(which) {
+  if (which === 'front') {
+    startWebRTC('frontCamera','frontCameraStatus','frontDot','frontNoFeed','frontReconnBtn', CFG.frontStream);
+  } else {
+    startWebRTC('backCamera','backCameraStatus','backDot','backNoFeed','backReconnBtn', CFG.backStream);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  LINEAR JOYSTICK (left)
+// ══════════════════════════════════════════════════════════════
+(function() {
+  const container = document.getElementById('joystick-container');
+  const knob      = document.getElementById('joystick');
+  const R   = container.offsetWidth / 2;
+  const kr  = knob.offsetWidth / 2;
+  const maxR = R - kr - 4;
+
+  let active = false, cx = 0, cy = 0;
+
+  function setKnob(x, y) {
+    knob.style.left = (R - kr + x) + 'px';
+    knob.style.top  = (R - kr + y) + 'px';
+    const nx = +(x / maxR).toFixed(2);
+    const ny = +(-y / maxR).toFixed(2);
+    document.getElementById('jsLinStatus').textContent = `x:${nx.toFixed(2)} y:${ny.toFixed(2)}`;
+    if (typeof sendJoystickCommand === 'function' && !window.__viewerMode) {
+      sendJoystickCommand(nx, ny);
+    }
+    const parts = [];
+    if (ny >  0.1) parts.push('FWD');
+    if (ny < -0.1) parts.push('BWD');
+    if (nx < -0.1) parts.push('LEFT');
+    if (nx >  0.1) parts.push('RIGHT');
+    document.getElementById('joystickStatus').textContent = parts.join('+') || 'CENTERED';
+  }
+
+  function clamp(x, y) {
+    const dist = Math.sqrt(x*x + y*y);
+    if (dist > maxR) { const s = maxR/dist; return [x*s, y*s]; }
+    return [x, y];
+  }
+
+  function getXY(e) {
+    const rect = container.getBoundingClientRect();
+    const src  = e.touches ? e.touches[0] : e;
+    return [src.clientX - rect.left - R, src.clientY - rect.top - R];
+  }
+
+  function start(e) { active = true; e.preventDefault(); move(e); }
+  function move(e)  { if (!active) return; e.preventDefault(); const [x,y] = clamp(...getXY(e)); cx=x; cy=y; setKnob(x,y); }
+  function end()    { active=false; cx=0; cy=0; setKnob(0,0); }
+
+  container.addEventListener('mousedown',  start);
+  container.addEventListener('touchstart', start, { passive:false });
+  window.addEventListener('mousemove',  move);
+  window.addEventListener('touchmove',  move, { passive:false });
+  window.addEventListener('mouseup',    end);
+  window.addEventListener('touchend',   end);
+
+  setKnob(0, 0);
+})();
+
+// ══════════════════════════════════════════════════════════════
+//  YAW JOYSTICK (right) — horizontal axis only
+// ══════════════════════════════════════════════════════════════
+(function() {
+  const container = document.getElementById('yaw-container');
+  const knob      = document.getElementById('yaw-knob');
+  const R   = container.offsetWidth / 2;
+  const kr  = knob.offsetWidth / 2;
+  const maxR = R - kr - 4;
+
+  let active = false;
+
+  function setKnob(x) {
+    knob.style.left = (R - kr + x) + 'px';
+    knob.style.top  = (R - kr)     + 'px';
+    const yaw = +(x / maxR).toFixed(2);
+    document.getElementById('jsYawStatus').textContent = `yaw: ${yaw.toFixed(2)}`;
+    if (typeof sendYawCommand === 'function' && !window.__viewerMode) {
+      sendYawCommand(yaw);
+    }
+    if (Math.abs(yaw) > 0.1) {
+      document.getElementById('joystickStatus').textContent = yaw > 0 ? 'YAW→' : '←YAW';
+    }
+  }
+
+  function clampX(x) { return Math.max(-maxR, Math.min(maxR, x)); }
+
+  function getX(e) {
+    const rect = container.getBoundingClientRect();
+    const src  = e.touches ? e.touches[0] : e;
+    return src.clientX - rect.left - R;
+  }
+
+  function start(e) { active = true; e.preventDefault(); move(e); }
+  function move(e)  { if (!active) return; e.preventDefault(); setKnob(clampX(getX(e))); }
+  function end()    { active = false; setKnob(0); }
+
+  container.addEventListener('mousedown',  start);
+  container.addEventListener('touchstart', start, { passive:false });
+  window.addEventListener('mousemove',  move);
+  window.addEventListener('touchmove',  move, { passive:false });
+  window.addEventListener('mouseup',    end);
+  window.addEventListener('touchend',   end);
+
+  setKnob(0);
+})();
+
+// ══════════════════════════════════════════════════════════════
+//  KEYBOARD  — WASD (linear) + Q/E (yaw)
+// ══════════════════════════════════════════════════════════════
+(function() {
+  const keyMap = { w:false, a:false, s:false, d:false, q:false, e:false };
+  let kbTimer = null;
+
+  function sendKeys() {
+    if (window.__viewerMode) return;
+    const fwd    = (keyMap.w ? 1:0) - (keyMap.s ? 1:0);
+    const strafe = (keyMap.a ? 1:0) - (keyMap.d ? 1:0);
+    const yaw    = (keyMap.q ? 1:0) - (keyMap.e ? 1:0);
+    if (typeof sendJoystickCommand === 'function') sendJoystickCommand(-strafe, fwd);
+    if (typeof sendYawCommand      === 'function') sendYawCommand(yaw);
+    const parts = [];
+    if (keyMap.w) parts.push('FWD'); if (keyMap.s) parts.push('BWD');
+    if (keyMap.a) parts.push('LEFT'); if (keyMap.d) parts.push('RIGHT');
+    if (keyMap.q) parts.push('←YAW'); if (keyMap.e) parts.push('YAW→');
+    document.getElementById('joystickStatus').textContent = parts.join('+') || 'CENTERED';
+  }
+
+  document.addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    if (!(k in keyMap) || keyMap[k]) return;
+    keyMap[k] = true;
+    const el = document.getElementById('key-' + k);
+    if (el) el.classList.add('pressed');
+    if (!kbTimer) kbTimer = setInterval(sendKeys, 50);
+  });
+
+  document.addEventListener('keyup', e => {
+    const k = e.key.toLowerCase();
+    if (!(k in keyMap)) return;
+    keyMap[k] = false;
+    const el = document.getElementById('key-' + k);
+    if (el) el.classList.remove('pressed');
+    if (!Object.values(keyMap).some(Boolean)) {
+      clearInterval(kbTimer); kbTimer = null;
+      if (typeof sendJoystickCommand === 'function') sendJoystickCommand(0, 0);
+      if (typeof sendYawCommand      === 'function') sendYawCommand(0);
+      document.getElementById('joystickStatus').textContent = 'CENTERED';
+    }
+  });
+})();
+
+// ══════════════════════════════════════════════════════════════
+//  GAMEPAD
+// ══════════════════════════════════════════════════════════════
+(function() {
+  let gpIndex = null;
+  let gpLoop  = null;
+  const DEADZONE = 0.12;
+
+  function dead(v) { return Math.abs(v) < DEADZONE ? 0 : v; }
+
+  function onGamepadConnected(e) {
+    gpIndex = e.gamepad.index;
+    document.getElementById('gamepadIndicator').classList.add('active');
+    document.getElementById('gamepadName').textContent =
+      e.gamepad.id.replace(/\s*\(.*?\)/g,'').substring(0, 22);
+    console.log('[Gamepad] Connected:', e.gamepad.id);
+    if (!gpLoop) gpLoop = setInterval(pollGamepad, 50);
+  }
+
+  function onGamepadDisconnected(e) {
+    if (e.gamepad.index !== gpIndex) return;
+    gpIndex = null;
+    document.getElementById('gamepadIndicator').classList.remove('active');
+    document.getElementById('gamepadName').textContent = 'No Gamepad';
+    if (gpLoop) { clearInterval(gpLoop); gpLoop = null; }
+    if (!window.__viewerMode) {
+      if (typeof sendJoystickCommand === 'function') sendJoystickCommand(0, 0);
+      if (typeof sendYawCommand      === 'function') sendYawCommand(0);
+    }
+  }
+
+  function pollGamepad() {
+    if (gpIndex === null) return;
+    const gp = navigator.getGamepads ? navigator.getGamepads()[gpIndex] : null;
+    if (!gp || window.__viewerMode) return;
+
+    const lx = dead(gp.axes[0] || 0);
+    const ly = dead(gp.axes[1] || 0);
+    const rx = dead(gp.axes[2] || 0);
+
+    if (typeof sendJoystickCommand === 'function') sendJoystickCommand(lx, -ly);
+    if (typeof sendYawCommand      === 'function') sendYawCommand(rx);
+
+    const parts = [];
+    if (-ly >  0.1) parts.push('FWD');
+    if (-ly < -0.1) parts.push('BWD');
+    if ( lx < -0.1) parts.push('LEFT');
+    if ( lx >  0.1) parts.push('RIGHT');
+    if ( rx < -0.1) parts.push('←YAW');
+    if ( rx >  0.1) parts.push('YAW→');
+    document.getElementById('joystickStatus').textContent = parts.join('+') || 'CENTERED';
+  }
+
+  window.addEventListener('gamepadconnected',    onGamepadConnected);
+  window.addEventListener('gamepaddisconnected', onGamepadDisconnected);
+
+  setInterval(() => {
+    if (gpIndex !== null) return;
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (let i = 0; i < pads.length; i++) {
+      if (pads[i]) { onGamepadConnected({ gamepad: pads[i] }); break; }
+    }
+  }, 1000);
+})();
+
+// ══════════════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(resizeMapCanvas, 60);
+
+  document.getElementById('setGoalBtn')?.addEventListener('click', () => {
+    if (!window.__viewerMode && typeof mapRenderer !== 'undefined') mapRenderer.toggleGoalMode();
+  });
+  document.getElementById('clearGoalBtn')?.addEventListener('click', () => {
+    if (!window.__viewerMode && typeof mapRenderer !== 'undefined') {
+      mapRenderer.clearGoal();
+      document.getElementById('goalInfoCard').classList.remove('visible');
+    }
+  });
+  document.getElementById('centerViewBtn')?.addEventListener('click', () => {
+    if (typeof mapRenderer !== 'undefined' && mapRenderer.robotPos && mapRenderer.mapData) {
+      const info = mapRenderer.mapData.info;
+      const rx = (mapRenderer.robotPos.x - info.origin.position.x) / info.resolution;
+      const ry = (-mapRenderer.robotPos.y - info.origin.position.y) / info.resolution;
+      mapRenderer.panX = mapRenderer.canvas.width  / 2 - rx * mapRenderer.zoom;
+      mapRenderer.panY = mapRenderer.canvas.height / 2 - ry * mapRenderer.zoom;
+      mapRenderer.redraw();
+    }
+  });
+  document.getElementById('resetZoomBtn')?.addEventListener('click', () => {
+    if (typeof mapRenderer !== 'undefined') {
+      mapRenderer.zoom = 1; mapRenderer.panX = 0; mapRenderer.panY = 0;
+      document.getElementById('zoomLevel').textContent = '1.00x';
+      mapRenderer.redraw();
+    }
+  });
+
+  // Goal polling
+  setInterval(() => {
+    if (typeof mapRenderer !== 'undefined' && mapRenderer.goalPos) {
+      document.getElementById('goalInfoCard').classList.add('visible');
+      document.getElementById('goalX').textContent = mapRenderer.goalPos.x.toFixed(2) + ' m';
+      document.getElementById('goalY').textContent = mapRenderer.goalPos.y.toFixed(2) + ' m';
+      if (mapRenderer.robotPos) {
+        const dx = mapRenderer.goalPos.x - mapRenderer.robotPos.x;
+        const dy = mapRenderer.goalPos.y - mapRenderer.robotPos.y;
+        document.getElementById('goalDistance').textContent  = Math.sqrt(dx*dx+dy*dy).toFixed(2) + ' m';
+        document.getElementById('goalDirection').textContent = (((Math.atan2(dy,dx)*180/Math.PI)+360)%360).toFixed(1) + '°';
+      }
+    }
+  }, 100);
+
+  // Mirror values to bottom big-number strip
+  setInterval(() => {
+    [['velX','bigVelX'],['velY','bigVelY'],['yawSpeed','bigYawSpeed'],
+     ['robotMode','modeDisp'],['gaitType','gaitDisp'],['slamStatus','slamDisp'],['bodyHeight','heightDisp']
+    ].forEach(([s,d]) => {
+      const sv = document.getElementById(s);
+      const dv = document.getElementById(d);
+      if (sv && dv && sv.textContent !== '--') dv.textContent = sv.textContent;
+    });
+  }, 200);
+
+  // Map toggle - Navigation panel (allow hiding it when not needed)
+  window.mapVisible = true;
+  window.toggleMap = function() {
+    const colCenter = document.getElementById('colCenter');
+    const main      = document.getElementById('main');
+    const btn       = document.getElementById('mapToggleBtn');
+    mapVisible = !mapVisible;
+    if (!mapVisible) {
+      colCenter.style.display = 'none';
+      main.style.gridTemplateColumns = '1fr 1fr 220px';
+      btn.textContent = '⊞ Map';
+      btn.classList.add('hidden-state');
+    } else {
+      colCenter.style.display = 'flex';
+      main.style.gridTemplateColumns = '1fr 1fr 1fr 220px';
+      btn.textContent = '⊟ Map';
+      btn.classList.remove('hidden-state');
+      setTimeout(resizeMapCanvas, 350);
+    }
+  };
+
+  // Motion toggle
+  window.motionVisible = true;
+  window.toggleMotion = function() {
+    const el  = document.getElementById('bottomLeft');
+    const btn = document.getElementById('motionToggleBtn');
+    motionVisible = !motionVisible;
+    el.style.display = motionVisible ? 'flex' : 'none';
+    rebuildBottomGrid();
+    btn.textContent = (motionVisible ? '⊟' : '⊞') + ' Motion';
+    btn.classList.toggle('hidden-state', !motionVisible);
+  };
+
+  // Telemetry toggle
+  window.telemetryVisible = true;
+  window.toggleTelemetry = function() {
+    const el  = document.getElementById('bottomCenter');
+    const btn = document.getElementById('telemetryToggleBtn');
+    telemetryVisible = !telemetryVisible;
+    el.style.display = telemetryVisible ? 'flex' : 'none';
+    rebuildBottomGrid();
+    btn.textContent = (telemetryVisible ? '⊟' : '⊞') + ' Telemetry';
+    btn.classList.toggle('hidden-state', !telemetryVisible);
+  };
+
+  // Status toggle
+  window.statusVisible = true;
+  window.toggleStatus = function() {
+    const el  = document.getElementById('bottomRight');
+    const btn = document.getElementById('statusToggleBtn');
+    statusVisible = !statusVisible;
+    el.style.display = statusVisible ? 'flex' : 'none';
+    rebuildBottomGrid();
+    btn.textContent = (statusVisible ? '⊟' : '⊞') + ' Status';
+    btn.classList.toggle('hidden-state', !statusVisible);
+  };
+
+  // Rebuild bottom grid columns based on visible panels
+  function rebuildBottomGrid() {
+    const bottom = document.getElementById('bottom');
+    const app    = document.getElementById('app');
+    const cols   = [];
+    if (window.motionVisible)    cols.push('340px');
+    if (window.telemetryVisible) cols.push('1fr');
+    if (window.statusVisible)    cols.push('220px');
+    bottom.style.gridTemplateColumns = cols.length ? cols.join(' ') : '1fr';
+
+    // Collapse entire bottom strip if all hidden, expand if any visible
+    const anyVisible = window.motionVisible || window.telemetryVisible || window.statusVisible;
+    bottom.style.display = anyVisible ? 'grid' : 'none';
+    app.style.gridTemplateRows = anyVisible
+      ? 'var(--topbar) 1fr var(--bottom)'
+      : 'var(--topbar) 1fr';
+  }
+  // Start cameras
+  startWebRTC('frontCamera','frontCameraStatus','frontDot','frontNoFeed','frontReconnBtn', CFG.frontStream);
+  startWebRTC('backCamera', 'backCameraStatus', 'backDot', 'backNoFeed', 'backReconnBtn',  CFG.backStream);
+});
+</script>
+
+</body>
+</html>
