@@ -42,6 +42,12 @@ Viewer
 Username: GlocompViewer
 Password: Gl0c0mp@V1ew!
 
+Username: GlocompEditor
+Password: Gl0c0mp@Ed1t!
+
+Username: GlocompAdmin
+Password: Gl0c0mp@Admin!
+
 
 ---
 
