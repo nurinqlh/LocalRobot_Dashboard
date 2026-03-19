@@ -50,7 +50,7 @@ cd ~/Downloads/robot-dashboard
 python3 -m http.server 8181
 ```
 
-Then open your browser and go to:
+Then open browser and go to:
 
 ```
 http://localhost:8181/index.html
@@ -62,7 +62,7 @@ Log in to enter the dashboard.
 
 ### Step 2 — SSH into the robot
 
-Make sure your laptop and the robot are on the same LAN or connected via Tailscale, then SSH in:
+Make sure laptop and the robot are on the same LAN or connected via Tailscale, then SSH in:
 
 ```bash
 ssh user@192.168.123.164
@@ -85,14 +85,14 @@ cd /path/to/mediamtx
 ./mediamtx
 ```
 
-Verify the camera streams are live by opening these URLs directly in your browser:
+Verify the camera streams are live by opening these URLs directly in browser:
 
 ```
 http://192.168.123.164:8889/front_cam/
 http://192.168.123.164:8889/back_cam/
 ```
 
-If you see video → ✅ MediaMTX is working correctly.
+If see video → MediaMTX is working correctly.
 
 ---
 
